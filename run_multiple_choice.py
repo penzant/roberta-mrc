@@ -765,7 +765,7 @@ def predict_example(args, model, example, processor, tokenizer):
     input_example = InputExample(
         example_id=example.get('example_id', 'demo'),
         question=example['question'],
-        contexts=[example['document']] * 4,
+        contexts=[example['document']] * len(processor.get_labels()),
         endings=example['options'],
         label='0',
     )

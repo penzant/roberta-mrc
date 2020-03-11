@@ -1,6 +1,7 @@
 # from allennlp sever_simple.py
 from string import Template
 from typing import List
+import re
 
 _PAGE_TEMPLATE = Template(
 """
@@ -22,7 +23,6 @@ _PAGE_TEMPLATE = Template(
                         <div class="model__content">
                             <div id="input-document-id" style="display: none;"></div>
                             <div id="input-answer-label" style="display: none;"></div>
-                            $inputs
                             <div class="form__field form__field--btn">
                                 <button type="button" class="btn btn--icon-disclosure" style="margin-left: 10px;" onclick="ablate_example('shuffle_document')">
                                     Shuffle Document!
@@ -37,6 +37,7 @@ _PAGE_TEMPLATE = Template(
                                     Predict
                                 </button>
                             </div>
+                            $inputs
                         </div>
                     </div>
                 </div>
@@ -45,6 +46,10 @@ _PAGE_TEMPLATE = Template(
     </body>
     <script>
 function predict() {
+    for (var i = 0; i < 4; i++) {
+        if (!document.getElementById("input-option" + (i + 1).toString() + "-spec")) break;
+        document.getElementById("input-option" + (i + 1).toString() + "-spec").innerHTML = "";
+    }
     var quotedFieldList = $qfl;
     var data = {};
     quotedFieldList.forEach(function(fieldName) {
@@ -61,6 +66,7 @@ function predict() {
             var htmlResults = "<pre>" + JSON.stringify(response_data, null, 2) + "</pre>";
             var best_option = response_data["result"];
             for (var i = 0; i < 4; i++) {
+                if (!document.getElementById("input-option" + (i + 1).toString() + "-spec")) break;
                 var percentage = Math.round(response_data["result"][i]*100);
                 document.getElementById("input-option" + (i + 1).toString() + "-spec").innerHTML = drawPercentBar(100, percentage.toString(), '#2ECC71');
                 if (i == response_data["prediction"]) {
@@ -75,7 +81,7 @@ function predict() {
 function drawPercentBar(width, percent, color, background) {
     var barhtml = "";
     var pixels = width * (percent / 100);
-    barhtml += '<div style=\"display: inline-block; position: relative; text-align: center; width: 70px; \">(' + percent + '%)</div>';
+    barhtml += '<span style=\"display: inline-block; text-align: center; width: 70px; \">(' + percent + '%)</span>';
 
     barhtml += '<span style=\"display: inline-block; vertical-align: text-top; width: 100px; border: 1px solid black;\">';
 
@@ -89,6 +95,7 @@ function drawPercentBar(width, percent, color, background) {
 
 function get_example() {
     for (var i = 0; i < 4; i++) {
+        if (!document.getElementById("input-option" + (i + 1).toString() + "-spec")) break;
         document.getElementById("input-option" + (i + 1).toString() + "-spec").innerHTML = "";
     }
     var quotedFieldList = $qfl;
@@ -100,7 +107,13 @@ function get_example() {
             // outputting the raw JSON, change this part of the code.
             var response_data = JSON.parse(xhr.responseText);
             quotedFieldList.forEach(function(fieldName) {
-                document.getElementById("input-" + fieldName).value = response_data[fieldName];
+                var element = document.getElementById("input-" + fieldName);
+                element.value = response_data[fieldName];
+                var event = new Event('input', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+                element.dispatchEvent(event);
             });
             document.getElementById("input-document-id").innerHTML = response_data["example_id"];
             document.getElementById("input-document-spec").innerHTML = '<span style=\"margin-left: 10px;\">(ID: ' + response_data["example_id"] + ')</span>';
@@ -129,10 +142,13 @@ function ablate_example(ablation_type) {
             // outputting the raw JSON, change this part of the code.
             var response_data = JSON.parse(xhr.responseText);
             quotedFieldList.forEach(function(fieldName) {
-                document.getElementById("input-" + fieldName).value = response_data[fieldName];
-            });
-            quotedFieldList.forEach(function(fieldName) {
-                document.getElementById("input-" + fieldName).value = response_data[fieldName];
+                var element = document.getElementById("input-" + fieldName);
+                element.value = response_data[fieldName];
+                var event = new Event('input', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+                element.dispatchEvent(event);
             });
             if (response_data["example_id"]) {
                 document.getElementById("input-document-id").innerHTML = response_data["example_id"];
@@ -149,10 +165,17 @@ function ablate_example(ablation_type) {
     };
     xhr.send(JSON.stringify(data));    
 }
+
+function auto_grow(element) {
+    element.style.height = "5px";
+    element.style.height = (element.scrollHeight)+"px";
+}
+
     </script>
 </html>
 """
 )
+
 
 _SINGLE_INPUT_TEMPLATE = Template(
     """
@@ -160,16 +183,34 @@ _SINGLE_INPUT_TEMPLATE = Template(
             <label for="input-$field_name">$field_name<span id="input-$field_name-spec"></span></label>
             <input type="text" id="input-$field_name" type="text" required value placeholder="input goes here">
         </div>
-"""
+    """
 )
 
 _SINGLE_TEXTAREA_TEMPLATE = Template(
     """
         <div class="form__field">
             <label for="input-$field_name">$field_name<span id="input-$field_name-spec"></span></label>
-            <textarea type="text" id="input-$field_name" type="text" required value placeholder="input goes here"></textarea>
+            <textarea oninput="auto_grow(this)" type="text" id="input-$field_name" type="text" required value placeholder="input goes here"></textarea>
+        </div>
+    """
+)
+
+_SINGLE_LABEL_TEMPLATE = """
+        <div class="form__field">
+            <label for="input-options">options</label>
         </div>
 """
+
+_SINGLE_OPTION_TEMPLATE = Template(
+    """
+        <div class="form__field">
+            <label style="float: left; line-height: 2.75em;" for="input-option$option_num">$option_num.</label>
+            <div style="display: block; overflow: hidden;">
+                <textarea rows="1" oninput="auto_grow(this)" style="float: left; width: 70%; margin-left: 10px; height: 2.75em;" type="text" id="input-option$option_num" required="" value="" placeholder="input goes here"></textarea>
+                <span id="input-option$option_num-spec" style="line-height: 2.75em;"></span>
+            </div>
+        </div>
+    """
 )
 
 
@@ -243,7 +284,7 @@ hr {
   color: #fff!important;
   display: block;
   background: #2085bc;
-  padding: .9375em 3.625em;
+  padding: .6375em 1.625em;
   -webkit-transition: background-color .2s ease, opacity .2s ease;
   transition: background-color .2s ease, opacity .2s ease;
   margin-left: 10px;
@@ -328,8 +369,8 @@ form {
   box-shadow: 0 0 1.25em rgba(50, 50, 150, .05)
 }
 .form__field textarea {
-  resize: vertical;
-  min-height: 8.25em
+  /* resize: vertical; */
+  /* min-height: 8.25em */
 }
 .form__field .btn {
   -webkit-user-select: none;
@@ -501,7 +542,7 @@ h1 {
 }
 @media screen and (min-height:800px) {
   .model__content {
-    padding-top: 4.6vh;
+    /* padding-top: 4.6vh; */
     padding-bottom: 4.6vh
   }
 }
@@ -589,14 +630,15 @@ def _html(title: str, field_names: List[str]) -> str:
     for field_name in field_names:
         if field_name == "document":
             inputs += _SINGLE_TEXTAREA_TEMPLATE.substitute(field_name=field_name)
-        # elif field_name.startswith("options"):
-        #     inputs += _SINGLE_LABEL_TEMPLATE.substitute(field_name=)
-        #     for i in range(int(field_name.split())):
-        #         inputs += _SINGLE_OPTION_TAMPLATE.substitute(field_name=i+1)
+        elif field_name == "option_header":
+            inputs += _SINGLE_LABEL_TEMPLATE
+        elif field_name.startswith("option"):
+            option_num = re.findall(r'\d+', field_name)[0]
+            inputs += _SINGLE_OPTION_TEMPLATE.substitute(option_num=option_num)
         else:
             inputs += _SINGLE_INPUT_TEMPLATE.substitute(field_name=field_name)
 
-    quoted_field_names = (f"'{field_name}'" for field_name in field_names)
+    quoted_field_names = (f"'{field_name}'" for field_name in field_names if field_name != 'option_header')
     quoted_field_list = f"[{','.join(quoted_field_names)}]"
 
     return _PAGE_TEMPLATE.substitute(title=title, css=_CSS, inputs=inputs, qfl=quoted_field_list)
