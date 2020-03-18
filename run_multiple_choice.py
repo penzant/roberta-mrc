@@ -63,6 +63,11 @@ MODEL_CLASSES = {
     "roberta": (RobertaConfig, RobertaForMultipleChoice, RobertaTokenizer),
 }
 
+# tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # original
+tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| +|\p{L}+|\p{N}+|[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # split spaces
+my_stopwords = stopwords.words('english')
+my_stopwords.extend(["'s", "'t", "'re", "'ve", "'m", "'ll", "'d"])
+
 
 def select_field(features, field):
     return [[choice[field] for choice in feature.choices_features] for feature in features]
@@ -841,10 +846,8 @@ def input_ablation(ablation_type, example, tokenizer):
         example["question"] = " ".join(random.sample(question_tokens, len(question_tokens)))
     if ablation_type == "drop_function_words":
         doc_tokens = example["document"].split()
-        # tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # original
-        tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| +|\p{L}+|\p{N}+|[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # split spaces
         tokens = [
-            x if x.lower() not in stopwords.words('english') else "<unk>"
+            x if x.lower() not in my_stopwords else "<unk>"
             for x in re.findall(tokenization_pattern, example["document"])
         ]
         # tokens = tokenizer.tokenize(example["document"])

@@ -59,7 +59,7 @@ function predict() {
     var quotedFieldList = $qfl;
     var data = {};
     quotedFieldList.forEach(function(fieldName) {
-        data[fieldName] = document.getElementById("input-" + fieldName).value;
+        data[fieldName] = document.getElementById("input-" + fieldName).value.replace(/▮/g, "<unk>");
     })
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/predict');
@@ -180,7 +180,7 @@ function ablate_example(ablation_type) {
             var response_data = JSON.parse(xhr.responseText);
             quotedFieldList.forEach(function(fieldName) {
                 var element = document.getElementById("input-" + fieldName);
-                element.value = response_data[fieldName];
+                element.value = response_data[fieldName].replace(/<unk>/g, "▮");
                 var event = new Event('input', {
                     bubbles: true,
                     cancelable: true,
