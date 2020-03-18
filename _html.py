@@ -1,7 +1,7 @@
 # from allennlp sever_simple.py
+import re
 from string import Template
 from typing import List
-import re
 
 _PAGE_TEMPLATE = Template(
 """
@@ -24,6 +24,12 @@ _PAGE_TEMPLATE = Template(
                             <div id="input-document-id" style="display: none;"></div>
                             <div id="input-answer-label" style="display: none;"></div>
                             <div class="form__field form__field--btn">
+                                <button type="button" class="btn btn--icon-disclosure" style="margin-left: 10px;" onclick="get_original()">
+                                    Revert
+                                </button>
+                                <button type="button" class="btn btn--icon-disclosure" style="margin-left: 10px;" onclick="ablate_example('drop_function_words')">
+                                    Drop stopwords!
+                                </button>
                                 <button type="button" class="btn btn--icon-disclosure" style="margin-left: 10px;" onclick="ablate_example('shuffle_document')">
                                     Shuffle Document!
                                 </button>
@@ -124,6 +130,37 @@ function get_example() {
     xhr.send();
 }
 
+function get_original() {
+    for (var i = 0; i < 4; i++) {
+        if (!document.getElementById("input-option" + (i + 1).toString() + "-spec")) break;
+        document.getElementById("input-option" + (i + 1).toString() + "-spec").innerHTML = "";
+    }
+    var quotedFieldList = $qfl;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/revert');
+    xhr.onload = function() {
+        if (xhr.status == 200) {
+            // If you want a more impressive visualization than just
+            // outputting the raw JSON, change this part of the code.
+            var response_data = JSON.parse(xhr.responseText);
+            quotedFieldList.forEach(function(fieldName) {
+                var element = document.getElementById("input-" + fieldName);
+                element.value = response_data[fieldName];
+                var event = new Event('input', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+                element.dispatchEvent(event);
+            });
+            document.getElementById("input-document-id").innerHTML = response_data["example_id"];
+            document.getElementById("input-document-spec").innerHTML = '<span style=\"margin-left: 10px;\">(ID: ' + response_data["example_id"] + ')</span>';
+            document.getElementById("input-answer-label").innerHTML = response_data["label"];
+            document.getElementById("input-question-spec").innerHTML = '<span style=\"margin-left: 10px;\">(Answer: option' + (parseInt(response_data["label"]) + 1).toString() + ')</span>';
+        }
+    };
+    xhr.send();
+}
+
 function ablate_example(ablation_type) {
     var quotedFieldList = $qfl;
     var data = {};
@@ -163,7 +200,7 @@ function ablate_example(ablation_type) {
             }
         }
     };
-    xhr.send(JSON.stringify(data));    
+    xhr.send(JSON.stringify(data));
 }
 
 function auto_grow(element) {

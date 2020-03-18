@@ -1,5 +1,6 @@
-### 
+###
 import argparse
+import copy
 import json
 import random
 from string import Template
@@ -29,6 +30,8 @@ option_num = len(processor.get_labels())
 field_names = ["document", "question", "option_header"]
 for i in range(option_num):
     field_names.append(f'option{i+1}')
+
+original_example = None
 
 
 class RequestBody(BaseModel):
@@ -63,8 +66,8 @@ def make_prediction(input_body):
 
 
 def ablate_example(input_body):
-    example = convert_input_body_to_example(input_body)    
-    modified_example = input_ablation(input_body.specification, example)
+    example = convert_input_body_to_example(input_body)
+    modified_example = input_ablation(input_body.specification, example, tokenizer)
     for i, option in enumerate(modified_example["options"]):
         modified_example[f"option{i+1}"] = option
     return modified_example
@@ -87,17 +90,28 @@ def get_example():
     }
     for i, option in enumerate(example.endings):
         return_example[f"option{i+1}"] = option
+    global original_example
+    original_example = copy.deepcopy(return_example)
     return return_example
+
+
+@app.get("/revert")
+def get_original():
+    if original_example:
+        return original_example
+
 
 @app.post("/predict")
 def predict(body: RequestBody):
     return make_prediction(body)
 
+
 @app.post("/ablate")
 def ablate(body: RequestBody):
     return ablate_example(body)
 
+
 if __name__ == "__main__":
     # uvicorn.run('demo:app', reload=True)
     uvicorn.run(app)
-    
+

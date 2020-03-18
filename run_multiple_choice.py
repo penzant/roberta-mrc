@@ -15,19 +15,19 @@
 # limitations under the License.
 """ Finetuning the library models for multiple choice (Bert, Roberta, XLNet)."""
 
-
 import argparse
 import glob
 import logging
 import os
 import random
+import regex as re
+from nltk.corpus import stopwords
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-
 from transformers import (
     WEIGHTS_NAME,
     AdamW,
@@ -42,6 +42,7 @@ from transformers import (
     XLNetTokenizer,
     get_linear_schedule_with_warmup,
 )
+
 from my_utils_multiple_choice import convert_examples_to_features, processors, InputExample
 
 try:
@@ -683,7 +684,7 @@ def load_model(config_args):
         import time
         args.output_dir = os.path.join("/data/saku/tmp", f'{args.model_type}-predict-{time.strftime("%Y%m%d-%H%M%S")}')
         os.makedirs(args.output_dir)
-    
+
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -693,7 +694,7 @@ def load_model(config_args):
         device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
         args.n_gpu = 1
-    args.device = device    
+    args.device = device
 
     # Setup logging
     logging.basicConfig(
@@ -749,7 +750,7 @@ def load_model(config_args):
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
-    
+
     model.to(args.device)
 
     logger.info("Predictor parameters %s", args)
@@ -831,13 +832,24 @@ def predict_example(args, model, example, processor, tokenizer):
     return label_preds, prob_preds
 
 
-def input_ablation(ablation_type, example):
+def input_ablation(ablation_type, example, tokenizer):
     if ablation_type == "shuffle_document":
         doc_tokens = example["document"].split()
         example["document"] = " ".join(random.sample(doc_tokens, len(doc_tokens)))
     if ablation_type == "shuffle_question":
         question_tokens = example["question"].split()
         example["question"] = " ".join(random.sample(question_tokens, len(question_tokens)))
+    if ablation_type == "drop_function_words":
+        doc_tokens = example["document"].split()
+        # tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # original
+        tokenization_pattern = r"""'s|'t|'re|'ve|'m|'ll|'d| +|\p{L}+|\p{N}+|[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""" # split spaces
+        tokens = [
+            x if x.lower() not in stopwords.words('english') else "<unk>"
+            for x in re.findall(tokenization_pattern, example["document"])
+        ]
+        # tokens = tokenizer.tokenize(example["document"])
+        example["document"] = ''.join(tokens)
+
     return example
 
 
