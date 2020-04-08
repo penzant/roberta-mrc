@@ -21,6 +21,7 @@ import glob
 import json
 import logging
 import os
+import random
 from typing import List
 
 import tqdm
@@ -334,6 +335,70 @@ class ReclorProcessor(DataProcessor):
         return examples
 
 
+class QA4MREProcessor(DataProcessor):
+    """Processor for the ReClor data set."""
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {} train".format(data_dir))
+        return self._create_examples(json.load(open(os.path.join(data_dir, "train.json"), 'r')), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {} dev".format(data_dir))
+        return self._create_examples(json.load(open(os.path.join(data_dir, "val.json"), 'r')), "dev")
+
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {} test".format(data_dir))
+        return self._create_examples(os.path.join(data_dir, "qa4mre_gold.xml"), "test")
+
+    def get_labels(self):
+        """See base class."""
+        return ["0", "1", "2", "3"]
+
+    def _create_examples(self, file_path, type: str):
+        """Creates examples for the training, dev, and test sets."""
+        import xml.etree.ElementTree as etree
+
+        raw_data = etree.parse(file_path)
+        elements = raw_data.getroot()
+        examples = []
+        for topic in elements.findall('topic'):
+            topic_attr = topic.attrib
+            topic_id = '_'.join([topic_attr['t_id'], topic_attr['t_name']])
+            for rtest in topic.findall('reading-test'):
+                rtest_id = rtest.attrib['r_id']
+                qid = '-'.join([topic_id, rtest_id])
+                context = rtest.find('doc').text.replace("\u2019", "'")
+                qs = rtest.findall('q')
+                questions = []
+                for q in qs:
+                    question = q.find('q_str').text
+                    truth = ""
+                    options = []
+                    for ai, a in enumerate(q.findall('answer')):
+                        if 'correct' in a.attrib.keys():
+                            truth = ai
+                        ans_text = a.text.strip().replace('\u2019', "'")
+                        options.append(a.text)
+                    if len(options) > 4:
+                        cand_idxs = [i for i in range(len(options)) if i != truth]
+                        cand_idxs = sorted(random.sample(cand_idxs, 3) + [truth])
+                        truth = str(cand_idxs.index(truth))
+                        options = [opt for oi, opt in enumerate(options) if oi in cand_idxs]
+                    examples.append(
+                        InputExample(
+                            example_id=qid,
+                            question=question,
+                            contexts=[context, context, context, context],  # why...
+                            endings=[options[0], options[1], options[2], options[3]],
+                            label=truth,
+                        )
+                    )
+        return examples
+
+
 def convert_examples_to_features(
     examples: List[InputExample],
     label_list: List[str],
@@ -410,7 +475,7 @@ def convert_examples_to_features(
     return features
 
 
-processors = {"race": RaceProcessor, "swag": SwagProcessor, "arc": ArcProcessor, "reclor": ReclorProcessor}
+processors = {"race": RaceProcessor, "swag": SwagProcessor, "arc": ArcProcessor, "reclor": ReclorProcessor, "qa4mre": QA4MREProcessor}
 
 
-MULTIPLE_CHOICE_TASKS_NUM_LABELS = {"race", 4, "swag", 4, "arc", 4, "reclor", 4}
+MULTIPLE_CHOICE_TASKS_NUM_LABELS = {"race", 4, "swag", 4, "arc", 4, "reclor", 4, "qa4mre", 4}
