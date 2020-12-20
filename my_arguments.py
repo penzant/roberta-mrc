@@ -2,7 +2,7 @@ import argparse
 
 def get_argparse():
     parser = argparse.ArgumentParser()
-        
+
     # Required parameters
     parser.add_argument(
         "--data_dir",
